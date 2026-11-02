@@ -1,77 +1,95 @@
 import os
 import random
-import time
+import urllib.request
 from datetime import datetime
 import requests
 from PIL import Image, ImageDraw, ImageFont
+from moviepy.editor import ImageClip, AudioFileClip
 
-# --- CONFIGURATION & SECRETS ---
-# Secrets will be pulled from GitHub repository environment variables
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY") # Or OAuth tokens depending on your setup
-INSTAGRAM_ACCESS_TOKEN = os.getenv("INSTAGRAM_ACCESS_TOKEN")
-TIKTOK_ACCESS_TOKEN = os.getenv("TIKTOK_ACCESS_TOKEN")
-
-DARK_HUMOR_PROMPTS = [
-    "Write a short, brutally dark humor setup and punchline about modern existential dread.",
-    "Give me an absurd, pitch-black dark humor joke about medical anomalies or historical disasters.",
-    "Create a micro-joke with a completely unexpected, morbidly funny twist.",
-    "Write a dark humor one-liner about getting older and realizing nothing matters."
-]
-
+# --- 1. FREE AI TEXT GENERATION (NO PAID API KEYS) ---
 def generate_meme_content():
-    """Generates unique dark humor text using Gemini API."""
-    prompt = random.choice(DARK_HUMOR_PROMPTS)
+    """Uses Hugging Face's free public AI endpoint to generate fresh dark humor."""
+    API_URL = "https://api-inference.huggingface.co/models/google/gemma-2-2b-it"
+    
+    # Optional: If you want higher rate limits later, you can make a free account on HF 
+    # and put a free token in GitHub Secrets, but it works publicly for light use.
     headers = {"Content-Type": "application/json"}
+    
+    prompt = (
+        "Write a single, brutally dark humor one-liner joke. "
+        "Keep it under 15 words, punchy, and shocking. No intro text, just the joke."
+    )
+    
     payload = {
-        "contents": [{"parts": [{"text": f"{prompt} Keep it under 2 sentences. Make it punchy for a vertical video/image meme."}]}]
+        "inputs": f"<start_of_turn>user\n{prompt}<end_of_turn><start_of_turn>model",
+        "parameters": {"max_new_tokens": 50, "temperature": 0.9}
     }
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
-    response = requests.post(url, json=payload, headers=headers)
-    
-    if response.status_code == 200:
-        data = response.json()
-        try:
-            text = data["candidates"][0]["content"]["parts"][0]["text"]
-            return text.strip()
-        except (KeyError, IndexError):
-            pass
-            
-    return "When you realize adulthood is just choosing what to be tired about."
+    try:
+        response = requests.post(API_URL, headers=headers, json=payload, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            # Parse output safely
+            if isinstance(data, list) and len(data) > 0:
+                raw_text = data[0].get("generated_text", "")
+                # Clean up model tags
+                joke = raw_text.split("<end_of_turn>")[-1].strip()
+                if len(joke) > 5:
+                    return joke
+    except Exception as e:
+        print(f"AI API fallback triggered due to: {e}")
 
-def create_meme_image(text, output_path="meme.png"):
-    """Generates a vertical 1080x1920 image with randomized visual elements to avoid shadowbans."""
+    # Fallback pool just in case the public API rate-limits
+    fallbacks = [
+        "My grandfather has the heart of a lion... and a lifetime ban from the national zoo.",
+        "Give a man a match, and he'll be warm for a few hours. Set a man on fire, and he'll be warm for the rest of his life.",
+        "I was digging in our backyard the other day and found a chest full of gold coins. I was about to run inside to tell my wife, but then I remembered why I was digging in the backyard."
+    ]
+    return random.choice(fallbacks)
+
+
+# --- 2. AUTO-FETCH REAL MUSIC ON THE FLY ---
+def fetch_background_music(output_audio_path="temp_music.mp3"):
+    """Pulls a real instrumental beat automatically from a public web source."""
+    # Real copyright-free/public domain instrumental audio stream URLs
+    audio_urls = [
+        "https://upload.wikimedia.org/wikipedia/commons/transcoded/c/c4/Beethoven_Moonlight_1st_movement.ogg/Beethoven_Moonlight_1st_movement.ogg.mp3",
+        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
+    ]
+    url = random.choice(audio_urls)
+    try:
+        urllib.request.urlretrieve(url, output_audio_path)
+    except Exception:
+        pass
+    return output_audio_path
+
+
+# --- 3. VIDEO COMPILER ---
+def create_meme_video(text, output_video_path="meme_output.mp4"):
     width, height = 1080, 1920
     
-    # Randomize background tone slightly (dark shades) to alter file hashes/metadata
-    bg_color = (random.randint(10, 30), random.randint(10, 30), random.randint(10, 30))
+    # Randomize background color subtly for file-hash uniqueness (Anti-Shadowban)
+    bg_color = (random.randint(5, 20), random.randint(5, 20), random.randint(5, 20))
     image = Image.new("RGB", (width, height), color=bg_color)
     draw = ImageDraw.Draw(image)
     
-    # Anti-shadowban pixel tweak: Draw invisible or subtle randomized noise pixels
+    # Anti-shadowban pixel noise injection
     for _ in range(50):
-        rx, ry = random.randint(0, width), random.randint(0, height)
-        draw.point((rx, ry), fill=(random.randint(0, 50), random.randint(0, 50), random.randint(0, 50)))
+        draw.point((random.randint(0, width), random.randint(0, height)), fill=(random.randint(0, 40),)*3)
 
-    # Text rendering setup (Using default fallback or system font path if available)
     try:
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 64)
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 60)
     except IOError:
         font = ImageFont.load_default()
 
-    # Word wrapping logic
+    # Wrap text layout
     margin = 80
     max_width = width - (margin * 2)
-    lines = []
-    words = text.split()
-    current_line = ""
-    
-    for word in words:
+    lines, current_line = [], ""
+    for word in text.split():
         test_line = f"{current_line} {word}".strip()
         bbox = font.getbbox(test_line)
-        w = bbox[2] - bbox.left
-        if w <= max_width:
+        if (bbox[2] - bbox.left) <= max_width:
             current_line = test_line
         else:
             lines.append(current_line)
@@ -79,41 +97,48 @@ def create_meme_image(text, output_path="meme.png"):
     if current_line:
         lines.append(current_line)
 
-    # Draw centered text
+    # Render centered text with shadow
     total_height = len(lines) * 80
     y = (height - total_height) / 2
-    
     for line in lines:
         bbox = font.getbbox(line)
-        w = bbox[2] - bbox.left
-        x = (width - w) / 2
-        # Text shadow for readability
+        x = (width - (bbox[2] - bbox.left)) / 2
         draw.text((x + 4, y + 4), line, font=font, fill=(0, 0, 0))
         draw.text((x, y), line, font=font, fill=(255, 255, 255))
         y += 80
 
-    image.save(output_path, "PNG")
-    print(f"Meme generated successfully at {output_path}")
+    temp_img_path = "temp_meme.png"
+    image.save(temp_img_path, "PNG")
 
-def post_to_platforms(image_path, caption):
-    """Placeholder function integrating your existing publishing pipelines."""
-    print(f"Posting meme with caption: '{caption}'")
-    # Insert your YouTube Shorts, Instagram Reels, and TikTok API dispatch code here
-    # Ensure you add slight randomized tag variations or caption suffixes per post to avoid duplicate flagging.
+    # Fetch music and compile into 7s video
+    audio_path = fetch_background_music("temp_audio.mp3")
+
+    image_clip = ImageClip(temp_img_path).set_duration(7.0)
+    try:
+        audio_clip = AudioFileClip(audio_path).subclip(0, 7.0)
+        video_clip = image_clip.set_audio(audio_clip)
+    except Exception:
+        video_clip = image_clip
+
+    video_clip.fps = 24
+    video_clip.write_videofile(
+        output_video_path, 
+        codec="libx264", 
+        audio_codec="aac", 
+        preset="ultrafast", 
+        logger=None
+    )
+    
+    # Cleanup temps
+    for p in [temp_img_path, audio_path]:
+        if os.path.exists(p):
+            os.remove(p)
+            
+    print(f"Generated AI Video Meme: {output_video_path}")
 
 if __name__ == "__main__":
-    print(f"Starting daily meme generation batch at {datetime.now()}")
+    print(f"Starting AI generation batch at {datetime.now()}")
     for i in range(1, 3):
-        print(f"Generating Meme #{i}...")
         meme_text = generate_meme_content()
-        img_file = f"meme_{i}.png"
-        create_meme_image(meme_text, img_file)
-        
-        # Unique AI caption generation
-        caption = f"{meme_text} 💀 #darkhumor #relatable #meme"
-        
-        post_to_platforms(img_file, caption)
-        
-        # Stagger posts slightly
-        if i == 1:
-            time.sleep(5)
+        print(f"AI Generated Joke #{i}: {meme_text}")
+        create_meme_video(meme_text, f"meme_video_{i}.mp4")
