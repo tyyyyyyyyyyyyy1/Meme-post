@@ -1,13 +1,13 @@
-name: Automated Daily Dark Humor Memes
+name: Automated AI Meme Video Generator
 
 on:
   schedule:
-    # Runs twice a day (e.g., UTC morning and evening peak windows)
+    # Runs twice a day (e.g., 11:30 AM and 10:30 PM UTC)
     - cron: '30 11,22 * * *'
   workflow_dispatch:
 
 jobs:
-  publish-memes:
+  generate-memes:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -18,7 +18,12 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install Dependencies
+      - name: Install System Dependencies (FFmpeg for Video/Audio merging)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
@@ -30,11 +35,14 @@ jobs:
           echo "Sleeping for ${DELAY} seconds to randomize posting time..."
           sleep $DELAY
 
-      - name: Run Meme Generator & Publisher
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
-          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
-          TIKTOK_ACCESS_TOKEN: ${{ secrets.TIKTOK_ACCESS_TOKEN }}
+      - name: Run AI Meme Video Generator
+        run: python meme_generator.py
+
+      # Optional: If you want GitHub to automatically save/commit the generated MP4s back to your repo:
+      - name: Commit Generated Videos to Repo
         run: |
-          python meme_generator.py
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add meme_video_*.mp4
+          git commit -m "Auto-generated daily dark humor meme videos [skip ci]" || echo "No changes to commit"
+          git push
