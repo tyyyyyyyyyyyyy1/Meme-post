@@ -2,8 +2,7 @@ name: Automated AI Meme Video Generator
 
 on:
   schedule:
-    # Runs twice a day (e.g., 11:30 AM and 10:30 PM UTC)
-    - cron: '30 11,22 * * *'
+    - cron: '30 11 * * *'
   workflow_dispatch:
 
 jobs:
@@ -18,7 +17,7 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install System Dependencies (FFmpeg for Video/Audio merging)
+      - name: Install System Dependencies (FFmpeg)
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
@@ -28,17 +27,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Add Anti-Shadowban Random Delay
-        run: |
-          # Sleep for a random number of seconds (0 to 45 minutes) to randomize exact drop times
-          DELAY=$((RANDOM % 2700))
-          echo "Sleeping for ${DELAY} seconds to randomize posting time..."
-          sleep $DELAY
-
       - name: Run AI Meme Video Generator
         run: python meme_generator.py
 
-      # Optional: If you want GitHub to automatically save/commit the generated MP4s back to your repo:
       - name: Commit Generated Videos to Repo
         run: |
           git config --global user.name "github-actions[bot]"
