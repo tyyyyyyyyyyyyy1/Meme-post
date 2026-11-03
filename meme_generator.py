@@ -67,7 +67,8 @@ def create_meme_video(text, output_video_path="meme_output.mp4"):
     for word in text.split():
         test_line = f"{current_line} {word}".strip()
         bbox = font.getbbox(test_line)
-        if (bbox[2] - bbox.left) <= max_width:
+        # Fixed: bbox returns (left, top, right, bottom) tuple, use index 0 for left
+        if (bbox[2] - bbox[0]) <= max_width:
             current_line = test_line
         else:
             lines.append(current_line)
@@ -79,7 +80,7 @@ def create_meme_video(text, output_video_path="meme_output.mp4"):
     y = (height - total_height) / 2
     for line in lines:
         bbox = font.getbbox(line)
-        x = (width - (bbox[2] - bbox.left)) / 2
+        x = (width - (bbox[2] - bbox[0])) / 2
         draw.text((x + 4, y + 4), line, font=font, fill=(0, 0, 0))
         draw.text((x, y), line, font=font, fill=(255, 255, 255))
         y += 80
@@ -106,21 +107,9 @@ def create_meme_video(text, output_video_path="meme_output.mp4"):
             
     return output_video_path
 
-# --- 4. PLATFORM PUBLISHING HOOKS (Pulls from your GitHub Secrets) ---
+# --- 4. PLATFORM PUBLISHING HOOKS ---
 def post_to_youtube_shorts(video_path, caption):
-    yt_token = os.getenv("YOUTUBE_ACCESS_TOKEN")
-    print(f"Uploading {video_path} to YouTube Shorts...")
-    # Insert your YouTube Data API resumable upload script here using yt_token
-
-def post_to_instagram_reels(video_path, caption):
-    ig_token = os.getenv("INSTAGRAM_ACCESS_TOKEN")
-    print(f"Publishing {video_path} to Instagram Reels...")
-    # Insert your IG Graph API container/publish script here using ig_token
-
-def post_to_tiktok(video_path, caption):
-    tt_token = os.getenv("TIKTOK_ACCESS_TOKEN")
-    print(f"Uploading {video_path} to TikTok...")
-    # Insert your TikTok Content Posting API script here using tt_token
+    print(f"Ready for Buffer/API upload: {video_path}")
 
 if __name__ == "__main__":
     print(f"Starting execution at {datetime.now()}")
@@ -130,11 +119,3 @@ if __name__ == "__main__":
         
         print(f"Generating Video #{i}: {meme_text}")
         create_meme_video(meme_text, video_filename)
-        
-        # Unique AI caption generation with rotation to avoid shadowban filters
-        caption = f"{meme_text} 💀 #darkhumor #shorts #reels #trending"
-        
-        # Dispatch to your platforms using your GitHub secrets
-        post_to_youtube_shorts(video_filename, caption)
-        post_to_instagram_reels(video_filename, caption)
-        post_to_tiktok(video_filename, caption)
